@@ -1,0 +1,59 @@
+// DATABASE FOR OUR DATA WAREHOUSE
+create or replace database dwh;
+
+// SCHEMA FOR OUR STAGING AREA
+CREATE OR REPLACE SCHEMA STAGING;
+
+// SCHEMA TO MANAGE OUR EXTERNAL STAGES
+CREATE OR REPLACE SCHEMA EXTERNAL_STAGES;
+
+// DATABASE FOR FILE FORMATS AND OTHER SIMILAR FILES
+CREATE OR REPLACE DATABASE MANAGE_DB;
+CREATE OR REPLACE SCHEMA FILE_FORMATS;
+
+// CREATE FILE FORMAT
+CREATE OR REPLACE FILE FORMAT MANAGE_DB.FILE_FORMATS.CSV_FILEFORMAT
+    type = csv
+    field_delimiter = ','
+    skip_header = 1
+    null_if = ('NULL', 'null')
+    empty_field_as_null = True
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"';
+
+// CREATE STAGE
+CREATE OR REPLACE STAGE DWH.EXTERNAL_STAGES.AWS_STAGE
+    url = 's3://snowflakeauyrin/csv/first_dwh/'
+    storage_integration = s3_int
+    file_format = MANAGE_DB.FILE_FORMATS.CSV_FILEFORMAT;
+
+
+
+// create sales raw table
+create or replace table dwh.public.sales_raw(
+    "transaction_id" int,
+    "transaction_date" date,
+    "product_id" char(10),
+    "customer_id" int,
+    "payment" varchar,
+    "credit_card" bigint,
+    "loyalty_card" char,
+    "cost" numeric(10, 2),
+    "quantity" int,
+    "price" numeric(10, 2)
+);
+
+
+
+
+// create product table
+CREATE OR REPLACE TABLE DWH.PUBLIC.PRODUCT_RAW(
+    "product_id" char,
+    "product(brand)" varchar,
+    "category" varchar,
+    "sub_category" varchar
+);
+
+
+
+// create core area
+create schema dwh.core;

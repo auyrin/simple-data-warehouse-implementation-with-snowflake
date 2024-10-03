@@ -1,0 +1,10 @@
+// Create storage integration object
+
+create or replace storage integration s3_int
+  TYPE = EXTERNAL_STAGE
+  STORAGE_PROVIDER = S3
+  ENABLED = TRUE 
+  STORAGE_AWS_ROLE_ARN = 'copy arn from you i am role fro snowflake'
+  STORAGE_ALLOWED_LOCATIONS = ('bucket url', bucket url2);
+
+  // update the trust policy on aws by updating the external id and user arn 
