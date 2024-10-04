@@ -1,0 +1,24 @@
+// load sales data from s3 buckets
+
+COPY INTO DWH.PUBLIC.SALES_RAW
+    FROM @DWH.EXTERNAL_STAGES.AWS_STAGE
+    FILE_FORMAT = MANAGE_DB.FILE_FORMATS.CSV_FILEFORMAT
+    pattern = ".*Fact_Sales.*";
+
+
+
+// load the product data from s3 buckets
+
+COPY INTO DWH.PUBLIC.PRODUCT_RAW
+        FROM @DWH.EXTERNAL_STAGES.AWS_STAGE
+        FILE_FORMAT = MANAGE_DB.FILE_FORMATS.CSV_FILEFORMAT
+        PATTERN = ".*products.*";
+
+
+SELECT * FROM DWH.PUBLIC.SALES_RAW;
+// 
+
+
+
+SELECT * FROM DWH.PUBLIC.PRODUCT_RAW;
+// trtansform the column product(brand) into two different columns product and brand
