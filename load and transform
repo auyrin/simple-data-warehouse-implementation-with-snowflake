@@ -18,18 +18,36 @@ COPY INTO DWH.STAGING.PRODUCTS_RAW
 SELECT * FROM DWH.STAGING.SALES_RAW;
 
 
-// we need to pair the payment together with the loyalty card
-// it might be better to even make it it's own dimension (payment_dim)
-select 
+// we need to pair the payment together with the loyalty card. it might be better to even make it it's own dimension (payment_dim)
+
+// first create the core payment dimension in the creation file tab ---done
+
+
+//write a query that'll load it to our core area
+insert into dwh.core.payment_dim("payment", "loyalty_card")
+(select 
     distinct coalesce("payment", 'cash') as payment,
     "loyalty_card"
-from dwh.STAGING.sales_raw;
+from dwh.STAGING.sales_raw);
 
-// create the core payment dimension in the creation file tab
+// validate the table
+select * from dwh.core.payment_dim;
 
 
-// the final sales table (core sales table) will hold extra calculations like
-// total amount, total profit, payment_key, product_pk
+// the final sales table (core sales table) will have profit, total_amount, total_profit, product_fk, payment_fk
+
+//let's create this table in the creation tab ---done
+
+
+
+// load the transformed data into the table
+select 
+    s."transaction_id", s."transaction_date", s."product_id",
+    s."customer_id", p."payment_pk"
+
+
+
+
 
 
 SELECT * FROM DWH.STAGING.PRODUCT_RAW;
