@@ -41,15 +41,35 @@ select * from dwh.core.payment_dim;
 
 
 // load the transformed data into the table
-select 
-    s."transaction_id", s."transaction_date", s."product_id",
-    s."customer_id", p."payment_pk"
+SELECT 
+	"transaction_id",
+	"transaction_date ",
+	EXTRACT(year from "transaction_date")*10000 + EXTRACT('month' from "transaction_date")*100+EXTRACT('day' from "transaction_date")as 	"transaction_date_fk",
+	s."product_id" ,
+	p."product_pk" as "product_fk",
+	py."payment_pk" as "payment_fk",
+    "customer_id",
+    "credit_card",
+   	"cost",
+    "quantity",
+   	"price",
+    "cost" * "quantity" as "total_cost",
+    "price" * "quantity" as "total_price",
+    "total_price" - "total_cost" as "profit"
+FROM dwh.staging.sales_raw s
+LEFT JOIN 
+dwh.core.payment_dim py
+ON py."payment" = COALESCE(s."payment",'cash') AND py."loyalty_card"=s."loyalty_card"
+LEFT JOIN dwh.core.product_dim p on p."product_id"=s."product_id"
+order by "transaction_id";
 
-
-
+// i actually jumped the gun. i'm supposed to have done the product dimension first. now i can't run this
+// because i have no core product to reference
 
 
 
 SELECT * FROM DWH.STAGING.PRODUCT_RAW;
-// transform the column product(brand) into two different columns product and brand
+// transform the column product(brand) into two different columns product and brand and load it into the core
+
+
 
