@@ -96,3 +96,16 @@ CREATE OR REPLACE TABLE DWH.CORE.SALES_FACT(
     primary key ("transaction_id")
 );
 
+//create a new sequence for the CORE product table
+create sequence product_seq start with 1 increment by 1;
+
+// core product dimension
+CREATE OR REPLACE TABLE DWH.core.product_dim(
+    "product_pk" integer default product_seq.nextval,
+    "product_id" char(10),
+    "product_name" varchar,
+    "brand" varchar,
+    "category" varchar,
+    "subcategory" varchar
+);
+
