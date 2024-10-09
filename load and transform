@@ -70,6 +70,14 @@ order by "transaction_id";
 
 SELECT * FROM DWH.STAGING.PRODUCT_RAW;
 // transform the column product(brand) into two different columns product and brand and load it into the core
-
+INSERT INTO DWH.CORE.product_dim ("product_id", "product_name", "brand", "category", "sub_category")
+select 
+    "product_id",
+    cast(split(trim("product(brand)"), '(')[0] as string) as "product_name",
+    replace(cast(split(trim("product(brand)"), '(')[1] as string), ')', '') as "brand",
+    "category",
+    "sub_category"
+from dwh.staging.products_raw
+;
 
 
