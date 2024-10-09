@@ -106,6 +106,6 @@ CREATE OR REPLACE TABLE DWH.core.product_dim(
     "product_name" varchar,
     "brand" varchar,
     "category" varchar,
-    "subcategory" varchar
+    "sub_category" varchar
 );
 
