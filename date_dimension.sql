@@ -1,6 +1,6 @@
 -- create the date dimension
 
-CREATE OR REPLACE TABLE DATE_DIM(
+CREATE OR REPLACE TABLE dwh.public.DATE_DIM(
 "date_key"              INT NOT NULL,
 "date"                  DATE NOT NULL,
 "weekday"               VARCHAR NOT NULL,
@@ -24,7 +24,7 @@ CREATE OR REPLACE TABLE DATE_DIM(
 CREATE OR REPLACE SEQUENCE date_key_seq START = 20190101 INCREMENT = 1;
 
 -- Insert dates from 2019-01-01 to 2030-12-31
-INSERT INTO DATE_DIM
+INSERT INTO dwh.public.DATE_DIM
 SELECT
     date_key_seq.NEXTVAL AS DATE_KEY,
     d AS DATE,
@@ -51,7 +51,7 @@ FROM (
 ) AS dates
 WHERE d <= '2030-12-31';
 
-select * from date_dim;
+select * from dwh.public.date_dim;
 
 -- this date dimension generated using the generator function needs to be cleaned and transformed.
 
@@ -59,7 +59,7 @@ select * from date_dim;
 
 
 --WEEKDAY FIX
-UPDATE DATE_DIM
+UPDATE dwh.public.DATE_DIM
 SET "weekday"= CASE 
                        WHEN "weekday_num" = 1 THEN 'MONDAY'
                        WHEN "weekday_num" = 2 THEN 'TUESDAY'
@@ -72,7 +72,7 @@ SET "weekday"= CASE
                    END;
                    
 --MONTH_name FIX
-UPDATE DATE_DIM
+UPDATE dwh.public.DATE_DIM
 SET "month_name" = CASE 
                        WHEN "month_num" = 1 THEN 'JANUARY'
                        WHEN "month_num" = 2 THEN 'FEBUARY'
