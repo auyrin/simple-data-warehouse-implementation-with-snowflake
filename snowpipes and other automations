@@ -11,6 +11,16 @@ FROM @DWH.EXTERNAL_STAGES.AWS_STAGE
 
 DESC PIPE MANAGE_DB.PIPES.SALES_PIPE;
 
-SELECT * FROM DWH.STAGING.SALES_RAW;
+// CHECK IG IF OUR SNOWPIPE IS RUNNING
+SELECT SYSTEM$PIPE_STATUS( 'MANAGE_DB.PIPES.SALES_PIPE' );
 
-// AUTOMATE THE STAGING TO CORE PIPELINE WITH SCHEDULED TASKS
+// PAUSE THE SNOWPIPE(WHENEVER) because it might consume too much resources
+alter pipe manage_db.pipes.sales_pipe
+set PIPE_EXECUTION_PAUSED = TRUE;
+
+
+// before i upload new files in the aws s3 buckets that'll be copied automatically
+// by my snowpipe. lets automate the staging area processes.
+
+
+// AUTOMATE THE STAGING TO CORE PIPELINE via SCHEDULED TASKS
