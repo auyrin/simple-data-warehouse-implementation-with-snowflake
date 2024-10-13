@@ -24,3 +24,5 @@ set PIPE_EXECUTION_PAUSED = TRUE;
 
 
 // AUTOMATE THE STAGING TO CORE PIPELINE via SCHEDULED TASKS
+
+// steps: check pipe, truncate table if pending tasks, run snowpipe, do the neccessary transformations. insert into the core table
