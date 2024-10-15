@@ -27,4 +27,17 @@ set PIPE_EXECUTION_PAUSED = TRUE;
 
 // steps: check pipe, truncate table if pending tasks, run snowpipe, do the neccessary transformations. insert into the core table
 
-// check if there is a pending file in the snow pipe
+// an if statement that'll checkk and execute if some conditions are met
+IF 
+-- check if there is a pending file in the snow pipe
+ (SELECT JSON_EXTRACT_PATH_TEXT(SYSTEM$PIPE_STATUS( 'MANAGE_DB.PIPES.SALES_PIPE' ), 'pendingFileCount') > 0) THEN 
+-- if there is a file then truncate the sales table in the staging area
+TRUNCATE DWH.STAGING.SALES_RAW;
+END IF;
+
+
+-- RUN THE SNOWPIPE
+ALTER PIPE MANAGE_DB.PIPES.SALES_PIPE
+SET PIPE_EXECUTION_PAUSED = FALSE;
+
+--necessary transformations are in the load and transform file. lets do everything in a task.
