@@ -41,3 +41,5 @@ ALTER PIPE MANAGE_DB.PIPES.SALES_PIPE
 SET PIPE_EXECUTION_PAUSED = FALSE;
 
 --necessary transformations are in the load and transform file. lets do everything in a task.
+
+-- need to fix my if statement
