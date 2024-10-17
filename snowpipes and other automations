@@ -27,19 +27,45 @@ set PIPE_EXECUTION_PAUSED = TRUE;
 
 // steps: check pipe, truncate table if pending tasks, run snowpipe, do the neccessary transformations. insert into the core table
 
-// an if statement that'll checkk and execute if some conditions are met
+// lets create a procedure for checking our snowpipe
+CREATE OR REPLACE PROCEDURE DWH.PUBLIC.CHECK_PIPE_PROD()
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+BEGIN
 IF 
--- check if there is a pending file in the snow pipe
- (SELECT JSON_EXTRACT_PATH_TEXT(SYSTEM$PIPE_STATUS( 'MANAGE_DB.PIPES.SALES_PIPE' ), 'pendingFileCount') > 0) THEN 
--- if there is a file then truncate the sales table in the staging area
-TRUNCATE DWH.STAGING.SALES_RAW;
+    (SELECT JSON_EXTRACT_PATH_TEXT(SYSTEM$PIPE_STATUS( 'MANAGE_DB.PIPES.SALES_PIPE' ), 'pendingFileCount') > 0) THEN 
+    // truncate table
+    TRUNCATE DWH.STAGING.SALES_RAW; 
+    // run snowpipe
+    ALTER PIPE MANAGE_DB.PIPES.SALES_PIPE SET PIPE_EXECUTION_PAUSED = FALSE;
+    RETURN 'staging truncated...sales_pipe running';
+ELSE
+    -- pause our parent task
+    alter task dwh.public.check_pipe_task suspend;
+    RETURN 'no pending files in our sales_pipe';
 END IF;
+END;
+$$
+;
 
 
--- RUN THE SNOWPIPE
-ALTER PIPE MANAGE_DB.PIPES.SALES_PIPE
-SET PIPE_EXECUTION_PAUSED = FALSE;
+--necessary transformations are in the load and transform file. lets put everything in a task.
 
---necessary transformations are in the load and transform file. lets do everything in a task.
+// task would run every sunday at 7am utc
+CREATE OR REPLACE TASK DWH.PUBLIC.CHECK_PIPE_TASK
+    WAREHOUSE = COMPUTE_WH
+    SCHEDULE  = '3 MINUTE'
+    -- SCHEDULE = 'USING CRON 0 7 * * SUN UTC'
+    AS
+    CALL DWH.PUBLIC.CHECK_PIPE_PROD();
 
--- need to fix my if statement
+
+// CHILD TASK SHOULD DO THE TRANSFORMATIONS ONLY IF THE SALES TABLE HAS BEEN UPDATED
+
+-- STEPS .... select the result of the parent task and only run the child task if the parent task has been executed.
+
+-- investigate your pause logic
+
+select max("transaction_id") from dwh.core.sales_fact;
