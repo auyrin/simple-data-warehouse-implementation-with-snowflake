@@ -66,6 +66,10 @@ CREATE OR REPLACE TASK DWH.PUBLIC.CHECK_PIPE_TASK
 
 -- STEPS .... select the result of the parent task and only run the child task if the parent task has been executed.
 
+-- couldn't really do much today so i'll commit this statement
+
 -- investigate your pause logic
 
 select max("transaction_id") from dwh.core.sales_fact;
+
+-- my procedures was in sql instead of javascript so it didnt woek properly
