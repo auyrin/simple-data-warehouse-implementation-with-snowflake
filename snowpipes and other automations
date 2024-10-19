@@ -50,6 +50,29 @@ END;
 $$
 ;
 
+//javascript version
+CREATE OR REPLACE PROCEDURE DWH.PUBLIC.check_pipe_prod()
+RETURNS VARCHAR
+LANGUAGE JAVASCRIPT
+AS
+$$
+    var result;
+    
+    var statement = snowflake.createstatement[{sqlText: "(SELECT JSON_EXTRACT_PATH_TEXT(SYSTEM$PIPE_STATUS( 'MANAGE_DB.PIPES.SALES_PIPE' ), 'pendingFileCount') > 0)"}];
+
+    
+    // truncate table
+    TRUNCATE DWH.STAGING.SALES_RAW;
+    // run snowpipe
+    ALTER PIPE MANAGE_DB.PIPES.SALES_PIPE SET PIPE_EXECUTION_PAUSED = FALSE;
+    RETURN 'staging truncated...sales_pipe running';
+    ELSE
+        -- pause our parent task
+        alter task dwh.public.check_pipe_task suspend;
+        RETURN 'no pending files in our sales_pipe';
+$$;
+
+
 
 --necessary transformations are in the load and transform file. lets put everything in a task.
 
