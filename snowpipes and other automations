@@ -27,7 +27,9 @@ set PIPE_EXECUTION_PAUSED = TRUE;
 
 // steps: check pipe, truncate table if pending tasks, run snowpipe, do the neccessary transformations. insert into the core table
 
-// lets create a procedure for checking our snowpipe-- javascript procedure
+// lets create a procedure for checking our snowpipe
+
+-- javascript procedure
 CREATE OR REPLACE PROCEDURE DWH.PUBLIC.check_pipe_prod()
 RETURNS STRING
 LANGUAGE JAVASCRIPT
@@ -56,10 +58,6 @@ $$
 
         return 'Staging table truncated...sales_pipe is running';
     } else {
-        // Step 6: Suspend the parent task
-        sql_command = `ALTER TASK DWH.PUBLIC.CHECK_PIPE_TASK SUSPEND`;
-        snowflake.execute({ sqlText: sql_command });
-
         return 'No pending files in our sales_pipe';
     }
 $$;
@@ -67,37 +65,57 @@ $$;
 
 CALL CHECK_PIPE_PROD();
 
+-- our goal is to put everything in a single task due to the nature of what i want to do.
 
---necessary transformations are in the load and transform file. lets put everything in a task.
+-- i'll create another procedure for the transformations i need to do, but with the conditions that make the staging area function correctly
 
-// task would run every sunday at 7am utc
-CREATE OR REPLACE TASK DWH.PUBLIC.CHECK_PIPE_TASK
-    WAREHOUSE = COMPUTE_WH
-    SCHEDULE  = '1 MINUTE'
-    -- SCHEDULE = 'USING CRON 0 7 * * SUN UTC'
-    AS
-    CALL DWH.PUBLIC.CHECK_PIPE_PROD();
+CREATE OR REPLACE PROCEDURE dwh.public.TRANSFORM_LOAD_PROD()
+RETURNS STRING
+LANGUAGE JAVASCRIPT
+AS
+$$
+    try {
+        // Step 1: Call the check_pipe_prod procedure and get the value
+        var pipe_value_command = `CALL dwh.public.check_pipe_prod()`;
+        var pipe_value_result = snowflake.execute({ sqlText: pipe_value_command });
+        var pipe_value = '';
 
-alter task dwh.public.check_pipe_task SUSPEND;
+        if (pipe_value_result.next()) {
+            pipe_value = pipe_value_result.getColumnValue(1);
+        } else {
+            return "Error: Unable to retrieve pipe status.";
+        }
 
-show tasks;
+        // Step 2: Get the last transaction ID from the sales_fact table
+        var last_load_command = `SELECT MAX("transaction_id") AS last_load FROM dwh.core.sales_fact`;
+        var last_load_result = snowflake.execute({ sqlText: last_load_command });
+        var last_load = null;
 
-// CHILD TASK SHOULD DO THE TRANSFORMATIONS ONLY IF THE SALES TABLE HAS BEEN UPDATED
+        if (last_load_result.next()) {
+            last_load = last_load_result.getColumnValue(1);
+        } else {
+            return "Error: Unable to retrieve last transaction ID.";
+        }
 
--- STEPS .... select the result of the parent task and only run the child task if the parent task has been executed.
+        // Step 3: Conditional logic based on pipe_value
+        if (pipe_value === "Staging table truncated...sales_pipe is running") {
+            // Transformation and loading logic here
+            // Assuming we would perform transformation and load to the core area
+            // Add your transformation/load code here
 
--- investigate your pause logic
+            return 'Files loaded';
+        } else if (pipe_value === "No pending files in our sales_pipe") {
+            return "No files loaded";
+        } else {
+            return "Unexpected pipe status value: " + pipe_value;
+        }
+    } catch (err) {
+        return "Error: " + err.message;
+    }
+$$;
 
-CREATE OR REPLACE TASK DWH.PUBLIC.TRANSFORMATION_TASK
-    WAREHOUSE = COMPUTE_WH
-    AFTER DWH.PUBLIC.CHECK_PIPE_TASK
-    AS
-    select * from dwh.core.product_dim;
 
-select max("transaction_id") from dwh.core.sales_fact;
-
-
-alter task dwh.public.transformation_task resume;
+call transform_load_prod();
 
 
 
