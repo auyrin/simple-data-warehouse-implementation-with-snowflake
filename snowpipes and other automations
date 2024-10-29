@@ -67,9 +67,43 @@ CALL CHECK_PIPE_PROD();
 
 -- our goal is to put everything in a single task due to the nature of what i want to do.
 
--- i'll create another procedure for the transformations i need to do, but with the conditions that make the staging area function correctly
 
-CREATE OR REPLACE PROCEDURE dwh.public.TRANSFORM_LOAD_PROD()
+
+-- first lets make procedure that'll do the transformation
+CREATE OR REPLACE PROCEDURE DWH.PUBLIC.TRANSFORM_LOAD_PROD()
+RETURNS STRING
+LANGUAGE SQL
+AS
+BEGIN
+    insert into dwh.core.sales_fact
+    SELECT 
+	"transaction_id",
+	"transaction_date",
+	EXTRACT(year from "transaction_date")*10000 + EXTRACT(month from "transaction_date")*100+EXTRACT(day from "transaction_date")as 	"transaction_date_fk",
+	s."product_id" ,
+	p."product_pk" as "product_fk",
+	py."payment_pk" as "payment_fk",
+    "customer_id",
+    "credit_card",
+   	"cost",
+    "quantity",
+   	"price",
+    "cost" * "quantity" as "total_cost",
+    "price" * "quantity" as "total_price",
+    "total_price" - "total_cost" as "profit"
+    FROM dwh.staging.sales_raw s
+    LEFT JOIN 
+    dwh.core.payment_dim py
+    ON py."payment" = COALESCE(s."payment",'cash') AND py."loyalty_card"=s."loyalty_card"
+    LEFT JOIN dwh.core.product_dim p on p."product_id"=s."product_id"
+    order by "transaction_id";
+END;
+
+
+
+-- i'll create another procedure that'll check all the conditions we need to check that'll make the staging area function correctly.
+
+CREATE OR REPLACE PROCEDURE dwh.public.STAGING_AREA_PROD()
 RETURNS STRING
 LANGUAGE JAVASCRIPT
 AS
@@ -99,9 +133,25 @@ $$
 
         // Step 3: Conditional logic based on pipe_value
         if (pipe_value === "Staging table truncated...sales_pipe is running") {
-            // Transformation and loading logic here
-            // Assuming we would perform transformation and load to the core area
-            // Add your transformation/load code here
+        
+            // check to make sure it's not duplicated
+            var sql_command = 'select min("transaction_id") from dwh.staging.sales_raw';
+            var result = snowflake.execute({sqlText: sql_command});
+            if (result.next()) {
+                load = result.getColumnValue(1);
+            } else {
+                return "Error: Unable to retrieve last transaction ID.";
+            }
+            
+            // update the table if the first value meets the condition
+            if (load > last_load) {
+                // Transformation and loading logic here
+                sql_command = 'call transform_load_prod';
+                snowflake.execute({sqlText: sql_command});
+            } else {
+                return 'some data already loaded to the core';
+            }
+            
 
             return 'Files loaded';
         } else if (pipe_value === "No pending files in our sales_pipe") {
@@ -114,9 +164,38 @@ $$
     }
 $$;
 
+-- create our tasks to automate this process
 
-call transform_load_prod();
+// task would run every sunday at 7am utc
+
+-- parent task
+CREATE OR REPLACE TASK DWH.PUBLIC.CHECK_PIPE_TASK
+    WAREHOUSE = COMPUTE_WH
+    SCHEDULE  = '1 MINUTE'
+    -- SCHEDULE = 'USING CRON 0 7 * * SUN UTC'
+    AS
+    CALL DWH.PUBLIC.CHECK_PIPE_PROD();
+
+alter task dwh.public.check_pipe_task SUSPEND;
+
+show tasks;
+
+-- i need a delay in between, just to make sure the pipe has finished running
+
+-- Intermediate Delay Task
+CREATE OR REPLACE TASK DWH.PUBLIC.DELAY_TASK
+  WAREHOUSE = COMPUTE_WH
+  AFTER DWH.PUBLIC.CHECK_PIPE_TASK
+  AS
+  SELECT SYSTEM$WAIT(300); -- This waits 5 minutes (300 seconds)
+
+
+-- child task
+CREATE OR REPLACE TASK DWH.PUBLIC.staging_area_TASK
+    WAREHOUSE = COMPUTE_WH
+    AFTER DWH.PUBLIC.DELAY_TASK
+    AS
+    CALL DWH.PUBLIC.STAGING_AREA_PROD();
 
 
 
-select * from table(information_schema.task_history());
