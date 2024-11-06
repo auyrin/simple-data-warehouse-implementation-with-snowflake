@@ -109,3 +109,17 @@ CREATE OR REPLACE TABLE DWH.core.product_dim(
     "sub_category" varchar
 );
 
+-- this table is just for my snowpipe, as i'm using it in this implementation
+create or replace table dwh.public.raw_sales(
+    "transaction_id" int,
+    "transaction_date" date,
+    "product_id" char(10),
+    "customer_id" int,
+    "payment" varchar,
+    "credit_card" bigint,
+    "loyalty_card" char,
+    "cost" numeric(10, 2),
+    "quantity" int,
+    "price" numeric(10, 2),
+    primary key ("transaction_id")
+);
