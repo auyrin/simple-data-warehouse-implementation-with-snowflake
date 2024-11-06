@@ -1,3 +1,6 @@
+-- NOTE: for this particular implementation, the snowpipe acts as our etl pipeline from aws to snowflake.
+-- which we then transform and load into our core area using sheduled tasks.
+
 // CREATE SCHEMA FOR SNOWPIPES
 CREATE OR REPLACE SCHEMA MANAGE_DB.PIPES;
 
@@ -5,18 +8,22 @@ CREATE OR REPLACE SCHEMA MANAGE_DB.PIPES;
 CREATE OR REPLACE PIPE MANAGE_DB.PIPES.SALES_PIPE
 AUTO_INGEST = TRUE
 AS 
-COPY INTO DWH.staging.sales_raw
+COPY INTO DWH.public.raw_sales
 FROM @DWH.EXTERNAL_STAGES.AWS_STAGE
+pattern = '.*Fact_Sales.*'
 ;
 
+
 DESC PIPE MANAGE_DB.PIPES.SALES_PIPE;
+
+-- setup the notification channel by copying the notification_channel arn and pasting it in the arn section of the events notification property setup on aws
 
 // CHECK IG IF OUR SNOWPIPE IS RUNNING
 SELECT SYSTEM$PIPE_STATUS( 'MANAGE_DB.PIPES.SALES_PIPE' );
 
 // PAUSE THE SNOWPIPE(WHENEVER) because it might consume too much resources
 alter pipe manage_db.pipes.sales_pipe
-set PIPE_EXECUTION_PAUSED = TRUE;
+set PIPE_EXECUTION_PAUSED = True;
 
 
 // before i upload new files in the aws s3 buckets that'll be copied automatically
@@ -36,34 +43,37 @@ LANGUAGE JAVASCRIPT
 AS
 $$
     var sql_command;
-    var pending;
+    var max1;
+    var max2;
 
-    // Step 1: Get the pendingFileCount from SYSTEM$PIPE_STATUS
-    sql_command = `SELECT TO_NUMBER(JSON_EXTRACT_PATH_TEXT(SYSTEM$PIPE_STATUS('MANAGE_DB.PIPES.SALES_PIPE'), 'pendingFileCount')) AS pendingFileCount`;
+    // Step 1: get max transaction_id from pipe table
+    sql_command = `SELECT max("transaction_id") from dwh.public.raw_sales`;
     
     // Step 2: Execute the query and fetch the result
     var result = snowflake.execute({ sqlText: sql_command });
     result.next(); // Move to the first row
-    pending = result.getColumnValue(1); // Get the pending file count
+    max1 = result.getColumnValue(1); // Get the max value
 
-    // Step 3: Check if pendingFileCount is greater than 0
-    if (pending > 0) {
+    // get max2
+    sql_command = `SELECT max("transaction_id") from dwh.staging.sales_raw`;
+    var result = snowflake.execute({ sqlText: sql_command });
+    result.next(); // go to first row
+    max2 = result.getColumnValue(1); // Get the max value
+    
+    // Step 3: Check if pipe max is greater than staging max
+    if (max1 > max2) {
         // Step 4: Truncate the table dynamically
         sql_command = `TRUNCATE TABLE DWH.STAGING.SALES_RAW`;
         snowflake.execute({ sqlText: sql_command });
 
-        // Step 5: Un-pause the Snowpipe
-        sql_command = `ALTER PIPE MANAGE_DB.PIPES.SALES_PIPE SET PIPE_EXECUTION_PAUSED = FALSE`;
-        snowflake.execute({ sqlText: sql_command });
-
-        return 'Staging table truncated...sales_pipe is running';
+        return 'New data found...Staging table truncated.';
     } else {
-        return 'No pending files in our sales_pipe';
+        return 'No new data in our sales_pipe';
     }
 $$;
 
 
-CALL CHECK_PIPE_PROD();
+CALL dwh.public.CHECK_PIPE_PROD();
 
 -- our goal is to put everything in a single task due to the nature of what i want to do.
 
@@ -132,7 +142,7 @@ $$
         }
 
         // Step 3: Conditional logic based on pipe_value
-        if (pipe_value === "Staging table truncated...sales_pipe is running") {
+        if (pipe_value === "New data found...Staging table truncated") {
         
             // check to make sure it's not duplicated
             var sql_command = 'select min("transaction_id") from dwh.staging.sales_raw';
@@ -154,7 +164,7 @@ $$
             
 
             return 'Files loaded';
-        } else if (pipe_value === "No pending files in our sales_pipe") {
+        } else if (pipe_value === "No new data in our sales_pipe") {
             return "No files loaded";
         } else {
             return "Unexpected pipe status value: " + pipe_value;
@@ -171,12 +181,12 @@ $$;
 -- parent task
 CREATE OR REPLACE TASK DWH.PUBLIC.CHECK_PIPE_TASK
     WAREHOUSE = COMPUTE_WH
-    SCHEDULE  = '1 MINUTE'
+    SCHEDULE  = '10 MINUTE'
     -- SCHEDULE = 'USING CRON 0 7 * * SUN UTC'
     AS
     CALL DWH.PUBLIC.CHECK_PIPE_PROD();
 
-alter task dwh.public.check_pipe_task SUSPEND;
+alter task dwh.public.check_pipe_task suspend;
 
 show tasks;
 
@@ -197,5 +207,17 @@ CREATE OR REPLACE TASK DWH.PUBLIC.staging_area_TASK
     AS
     CALL DWH.PUBLIC.STAGING_AREA_PROD();
 
+-- truncate our pipe table
+CREATE OR REPLACE TASK DWH.PUBLIC.PIPE_CLEAR_TASK
+    WAREHOUSE = COMPUTE_WH
+    AFTER DWH.PUBLIC.STAGING_AREA_TASK
+    AS
+    TRUNCATE DWH.PUBLIC.RAW_SALES;
+
+
+
+select *
+  from table(information_schema.task_history())
+  order by scheduled_time desc;
 
 
